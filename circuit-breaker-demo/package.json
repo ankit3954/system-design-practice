@@ -1,0 +1,11 @@
+{
+  "name": "circuit-breaker-demo",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": ["services/*"],
+  "scripts": {
+    "dev:profile": "npm --workspace services/profile-service run dev",
+    "dev:post": "npm --workspace services/post-service run dev",
+    "build": "npm run build --workspaces"
+  }
+}

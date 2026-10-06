@@ -1,0 +1,107 @@
+========================================================================
+MYSQL LOCAL DUAL-INSTANCE REPLICATION GUIDE (WINDOWS)
+========================================================================
+
+This file contains the complete step-by-step documentation and commands
+used to set up asynchronous, binary log position-based replication 
+between two local MySQL instances running on a single laptop.
+
+------------------------------------------------------------------------
+ARCHITECTURE OVERVIEW
+------------------------------------------------------------------------
+* Source Instance:  Port 3306 | Server ID: 1 | Log Bin: Enabled
+* Replica Instance: Port 3307 | Server ID: 2 | Data Dir: C:\mysql_replica\Data
+
+========================================================================
+STEP 1: CONFIGURING THE REPLICA CONFIGURATION FILE
+========================================================================
+Create a text file at 'C:\mysql_replica\my_replica.ini' containing:
+
+[client]
+port=3307
+
+[mysql]
+no-beep
+
+[mysqld]
+port=3307
+datadir=C:/mysql_replica/Data
+log-error="LAPTOP-V3R77OMR-replica.err"
+server-id=2
+read_only=1
+default-storage-engine=INNODB
+lower_case_table_names=1
+sql-mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+
+========================================================================
+STEP 2: INITIALIZE DATA DIRECTORY AND RUN THE REPLICA SERVICE
+========================================================================
+Open Command Prompt as an Administrator and execute:
+
+1. Create the data directory:
+   mkdir C:\mysql_replica\Data
+
+2. Initialize basic system tables cleanly:
+   "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe" --defaults-file="C:\mysql_replica\my_replica.ini" --initialize-insecure
+
+3. Install the replica as a distinct Windows background service:
+   "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe" --install MySQL_Replica --defaults-file="C:\mysql_replica\my_replica.ini"
+
+4. Start the secondary server process:
+   net start MySQL_Replica
+
+========================================================================
+STEP 3: CONFIGURE REPLICATION USER & COORDINATES ON SOURCE (PORT 3306)
+========================================================================
+Log into your primary MySQL CLI:
+   mysql -u root -p -P 3306
+
+Run the following SQL commands to create the secure pathway:
+   -- Create replication account with native password to bypass unencrypted SSL network blockers
+   CREATE USER 'replicator'@'127.0.0.1' IDENTIFIED WITH mysql_native_password BY 'repl_secure_pass';
+   GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'127.0.0.1';
+   FLUSH PRIVILEGES;
+
+   -- Take note of the 'File' and 'Position' columns outputted here
+   SHOW BINARY LOG STATUS; 
+   EXIT;
+
+========================================================================
+STEP 4: BRIDGE THE DATA PIPE ON THE REPLICA (PORT 3307)
+========================================================================
+Log into your secondary MySQL CLI (Password is empty by default):
+   mysql -u root -P 3307
+
+Bind the replica instance to the source log coordinates:
+   CHANGE REPLICATION SOURCE TO
+   SOURCE_HOST='127.0.0.1',
+   SOURCE_PORT=3306,
+   SOURCE_USER='replicator',
+   SOURCE_PASSWORD='repl_secure_pass',
+   SOURCE_LOG_FILE='<YOUR_SOURCE_LOG_FILE_NAME>',
+   SOURCE_LOG_POS=<YOUR_SOURCE_LOG_POSITION>;
+
+   -- Start the data fetching background threads
+   START REPLICA;
+
+========================================================================
+STEP 5: TROUBLESHOOTING DDL/ADMINISTRATIVE EVENT CRASHES
+========================================================================
+If you receive error code 1396 (Operation ALTER USER failed) because the replica
+attempted to copy the user authorization change statement before the user profile
+existed locally, safely skip the transaction and resume replication by typing:
+
+   STOP REPLICA;
+   SET GLOBAL sql_replica_skip_counter = 1;
+   START REPLICA;
+
+========================================================================
+STEP 6: VERIFICATION
+========================================================================
+Verify that replication is healthy by executing:
+   SHOW REPLICA STATUS\G
+
+Ensure both fields indicate successful pipeline statuses:
+   Replica_IO_Running: Yes
+   Replica_SQL_Running: Yes
+========================================================================

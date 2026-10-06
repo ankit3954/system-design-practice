@@ -1,0 +1,38 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  profile-service:
+    build: ./services/profile-service
+    environment:
+      PORT: 3001
+    ports:
+      - "3001:3001"
+
+  post-service-1:
+    build: ./services/post-service
+    environment:
+      PORT: 3002
+      PROFILE_SERVICE_URL: http://profile-service:3001
+      REDIS_URL: redis://redis:6379
+      INSTANCE_ID: post-1
+    depends_on:
+      - redis
+      - profile-service
+    ports:
+      - "3002:3002"
+
+  post-service-2:
+    build: ./services/post-service
+    environment:
+      PORT: 3003
+      PROFILE_SERVICE_URL: http://profile-service:3001
+      REDIS_URL: redis://redis:6379
+      INSTANCE_ID: post-2
+    depends_on:
+      - redis
+      - profile-service
+    ports:
+      - "3003:3003"
