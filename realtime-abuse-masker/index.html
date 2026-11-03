@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Group Chat</title>
+  <style>
+    /* Basic Reset */
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+    
+    body { display: flex; height: 100vh; background-color: #f4f4f9; }
+    
+    /* Sidebar for Users */
+    #sidebar { width: 250px; background: #2c3e50; color: white; padding: 20px; display: flex; flex-direction: column; }
+    #sidebar h2 { font-size: 1.2rem; margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px; }
+    #user-list { list-style: none; overflow-y: auto; flex: 1; }
+    #user-list li { padding: 8px 0; display: flex; align-items: center; gap: 10px; }
+    .status-dot { width: 10px; height: 10px; background: #2ecc71; border-radius: 50%; }
+
+    /* Main Chat Area */
+    #main-chat { flex: 1; display: flex; flex-direction: column; }
+    #chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    
+    /* Message Styles */
+    .message { max-width: 70%; padding: 10px 15px; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .message.system { background: transparent; box-shadow: none; color: #888; font-size: 0.9em; align-self: center; }
+    .sender-name { font-weight: bold; font-size: 0.85em; color: #3498db; margin-bottom: 5px; }
+
+    /* Input Area */
+    #input-area { display: flex; padding: 20px; background: #fff; border-top: 1px solid #ddd; }
+    #message-input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 4px; margin-right: 10px; font-size: 1rem; }
+    #send-btn { padding: 12px 24px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    #send-btn:hover { background: #2980b9; }
+  </style>
+</head>
+<body>
+
+  <!-- Left Sidebar -->
+  <div id="sidebar">
+    <h2>Active Users</h2>
+    <ul id="user-list">
+      <!-- Users will be injected here by JS -->
+    </ul>
+  </div>
+
+  <!-- Right Chat Area -->
+  <div id="main-chat">
+    <div id="chat-box">
+      <!-- Messages will appear here -->
+    </div>
+    <form id="input-area">
+      <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" required />
+      <button type="submit" id="send-btn">Send</button>
+    </form>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    // 1. Get a username and join the chat
+    const myName = prompt("Enter your name to join the chat:") || "Anonymous";
+    socket.emit('join_chat', myName);
+
+    // DOM Elements
+    const form = document.getElementById('input-area');
+    const input = document.getElementById('message-input');
+    const chatBox = document.getElementById('chat-box');
+    const userList = document.getElementById('user-list');
+
+    // 2. Handle sending messages
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (text) {
+        socket.emit('send_message', text);
+        input.value = '';
+      }
+    });
+
+    // 3. Handle receiving messages
+    socket.on('receive_message', (data) => {
+      const msgDiv = document.createElement('div');
+      msgDiv.classList.add('message');
+      
+      if (data.sender === 'System') {
+        msgDiv.classList.add('system');
+        msgDiv.textContent = data.text;
+      } else {
+        msgDiv.innerHTML = `<div class="sender-name">${data.sender}</div><div>${data.text}</div>`;
+      }
+      
+      chatBox.appendChild(msgDiv);
+      chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to bottom
+    });
+
+    // 4. Handle updating the user list sidebar
+    socket.on('update_users', (users) => {
+      // Clear the current list
+      userList.innerHTML = '';
+      // Rebuild it
+      users.forEach(username => {
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="status-dot"></div> ${username}`;
+        userList.appendChild(li);
+      });
+    });
+  </script>
+</body>
+</html>
