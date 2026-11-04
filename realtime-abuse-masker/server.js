@@ -1,10 +1,31 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const fs = require('fs');
+const Trie = require('./trie');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
+const abuseFilter = new Trie();
+
+// 2. Read the text file synchronously BEFORE starting the server
+try {
+  // Read the file from the hard drive
+  const fileData = fs.readFileSync('banned_words.txt', 'utf8');
+  
+  // Split by newline, clean up spaces, and ignore blank lines
+  const bannedWords = fileData.split(/\r?\n/)
+                              .map(word => word.trim())
+                              .filter(word => word.length > 0);
+  
+  // Populate the Trie in RAM
+  bannedWords.forEach(word => abuseFilter.insert(word));
+  console.log(`Loaded ${bannedWords.length} banned words into the filter.`);
+} catch (err) {
+  console.error("Could not load banned_words.txt. Make sure the file exists.", err);
+}
 
 app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
 
@@ -36,9 +57,12 @@ io.on('connection', (socket) => {
     // Look up the sender's name using their socket ID
     const senderName = connectedUsers[socket.id];
     
+    // 4. Pass the raw text through the Trie scanner
+    const sanitizedText = abuseFilter.censor(text);
+
     io.to(roomName).emit('receive_message', {
       sender: senderName,
-      text: text
+      text: sanitizedText
     });
   });
 
